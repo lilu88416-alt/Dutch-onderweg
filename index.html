@@ -311,36 +311,53 @@ function renderStart(){
 }
 
 // ---------- speech recognition ----------
+// One recognizer for the whole page: iOS Safari often gives a second instance no audio at all.
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 let rec = null, listening = false, busy = false;
+let L = null; // state of the current listening attempt
+const SILENCE_MS = 2000, GRACE_MS = 9000, MAX_MS = 30000;
+function getRec(){
+  if(rec) return rec;
+  rec = new SR(); rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
+  rec.onstart = () => { if(!L) return; listening=true; L.startedAt = Date.now();
+    setStatus('listen', L.lang==='nl-NL' ? 'luisteren\u2026' : L.lang.startsWith('en') ? 'listening\u2026' : '\u542c\u7740\u2026'); $('btnMic').classList.add('on');
+    L.graceT = setTimeout(() => { if(L && !L.gotAny) finishListening(); }, GRACE_MS); L.maxT = setTimeout(finishListening, MAX_MS); };
+  // iOS Safari re-sends the whole transcript on every event, so rebuild from all results each time instead of appending.
+  rec.onresult = ev => { if(!L) return; let fin='', interim='';
+    for(let i=0;i<ev.results.length;i++){ const r=ev.results[i]; const t=(r[0]&&r[0].transcript)||''; if(r.isFinal) fin += (fin?' ':'')+t.trim(); else interim += (interim?' ':'')+t.trim(); }
+    L.text = (fin+' '+interim).trim(); if(L.text) L.gotAny = true;
+    $('youText').innerHTML = '<b>'+esc(fin)+'</b>'+(fin&&interim?' ':'')+esc(interim);
+    clearTimeout(L.silenceT); L.silenceT = setTimeout(finishListening, SILENCE_MS); };
+  rec.onerror = ev => { if(!L) return; L.error = ev.error;
+    if(ev.error==='not-allowed' || ev.error==='service-not-allowed'){ toast('\u9ea6\u514b\u98ce\u88ab\u62d2\u7edd\uff1aSafari \u5730\u5740\u680f AA \u2192 \u7f51\u7ad9\u8bbe\u7f6e \u2192 \u9ea6\u514b\u98ce \u2192 \u5141\u8bb8'); } };
+  rec.onend = () => { listening=false; $('btnMic').classList.remove('on'); if(!L) return;
+    const cur = L; clearTimeout(cur.silenceT); clearTimeout(cur.maxT); clearTimeout(cur.graceT);
+    const secs = ((Date.now()-(cur.startedAt||cur.askedAt))/1000).toFixed(1);
+    const t = (cur.text||'').trim();
+    if(t){ L=null; send(t); return; }
+    const hardErr = cur.error && cur.error!=='no-speech' && cur.error!=='aborted';
+    // Ended almost immediately with nothing heard and no hard error: the classic iOS post-playback failure. Retry once or twice.
+    if(!hardErr && (Date.now()-cur.askedAt) < 2500 && cur.tries < 2){ cur.tries++; cur.error=null; cur.startedAt=0; setStatus('think','microfoon opnieuw\u2026 ('+cur.tries+')'); setTimeout(() => { try{ rec.start(); }catch(e){ L=null; setStatus('idle','kon niet starten: '+e.name); } }, 700); return; }
+    L=null;
+    setStatus('idle', hardErr ? 'fout: '+cur.error+' ('+secs+' s)' : 'niets gehoord ('+secs+' s, poging '+(cur.tries+1)+') \u2014 tik opnieuw'); };
+  return rec;
+}
 function startListening(lang){
   if(!SR){ $('typebar').hidden=false; $('typeInput').focus(); return; }
   if(busy) return;
   stopSpeaking();
-  if(rec){ try{ rec.abort(); }catch(e){} }
-  // Continuous mode with our own end-of-speech detection: Safari's non-continuous mode gives up after
-  // about a second of silence, which is less than the pause before most people start talking.
-  rec = new SR(); rec.lang = lang; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
-  let finalText = '', gotAny = false, silenceT = null, maxT = null, graceT = null, stopped = false;
-  const SILENCE_MS = 2000, GRACE_MS = 9000, MAX_MS = 30000;
-  const finish = () => { if(stopped) return; stopped = true; clearTimeout(silenceT); clearTimeout(maxT); clearTimeout(graceT); try{ rec.stop(); }catch(e){} };
-  rec.onstart = () => { listening=true; setStatus('listen', lang==='nl-NL' ? 'luisteren…' : lang.startsWith('en') ? 'listening…' : '听着…'); $('btnMic').classList.add('on'); $('youText').innerHTML='';
-    graceT = setTimeout(() => { if(!gotAny) finish(); }, GRACE_MS); maxT = setTimeout(finish, MAX_MS); };
-  // iOS Safari re-sends the whole transcript on every event, so rebuild from all results each time instead of appending.
-  rec.onresult = ev => { let fin='', interim=''; for(let i=0;i<ev.results.length;i++){ const r=ev.results[i]; const t=(r[0]&&r[0].transcript)||''; if(r.isFinal) fin += (fin?' ':'')+t.trim(); else interim += (interim?' ':'')+t.trim(); }
-    finalText = (fin + ' ' + interim).trim(); if(finalText) gotAny = true;
-    $('youText').innerHTML = '<b>'+esc(fin)+'</b>'+(fin&&interim?' ':'')+esc(interim);
-    clearTimeout(silenceT); silenceT = setTimeout(finish, SILENCE_MS); };
-  rec.onerror = ev => { if(ev.error==='no-speech' || ev.error==='aborted'){ return; } // onend follows; decide there
-    listening=false; $('btnMic').classList.remove('on'); stopped = true;
-    if(ev.error==='not-allowed' || ev.error==='service-not-allowed'){ setStatus('idle','microfoon geblokkeerd'); toast('麦克风被拒绝：Safari 地址栏 AA → 网站设置 → 麦克风 → 允许'); }
-    else { setStatus('idle','fout: '+ev.error); } };
-  rec.onend = () => { listening=false; stopped = true; clearTimeout(silenceT); clearTimeout(maxT); clearTimeout(graceT); $('btnMic').classList.remove('on');
-    const t=finalText.trim(); if(t){ send(t); } else if($('status').dataset.s==='listen'){ setStatus('idle','niets gehoord — tik en begin direct'); } };
-  // Give the audio session a moment to switch from playback to the microphone.
-  setTimeout(() => { try{ rec.start(); }catch(e){ setStatus('idle','kon niet starten'); } }, 250);
+  const r = getRec();
+  if(listening){ try{ r.stop(); }catch(e){} return; }
+  L = { lang, text:'', gotAny:false, error:null, tries:0, askedAt:Date.now(), startedAt:0, silenceT:null, maxT:null, graceT:null };
+  r.lang = lang; $('youText').innerHTML='';
+  setStatus('think','microfoon aan\u2026');
+  // start() inside the tap handler itself: iOS is happier when the microphone is opened from a user gesture.
+  try{ r.start(); }
+  catch(e){ if(e && e.name==='InvalidStateError'){ try{ r.stop(); }catch(_){} setTimeout(()=>{ try{ r.start(); }catch(e2){ L=null; setStatus('idle','kon niet starten: '+e2.name); } }, 400); }
+    else { L=null; setStatus('idle','kon niet starten: '+(e&&e.name||'')); } }
 }
-function stopListening(){ if(rec && listening){ try{ rec.stop(); }catch(e){} } }
+function finishListening(){ if(rec && listening){ try{ rec.stop(); }catch(e){} } }
+function stopListening(){ finishListening(); }
 
 // ---------- speech synthesis ----------
 const synth = window.speechSynthesis;
@@ -585,8 +602,8 @@ $('navWords').onclick = () => show('viewWords');
 $('navSettings').onclick = () => show('viewSettings');
 $('backFromWords').onclick = () => show(session && !$('viewSession').hidden ? 'viewSession' : 'viewStart');
 $('backFromSettings').onclick = () => show('viewStart');
-$('btnMic').onclick = () => { if(listening){ stopListening(); return; } if(busy){ stopSpeaking(); busy=false; setStatus('idle','onderbroken'); } unlockAudio(); startListening('nl-NL'); };
-$('btnZh').onclick = () => { if(busy){ stopSpeaking(); busy=false; } unlockAudio(); startListening(state.settings.altLang||'zh-CN'); };
+$('btnMic').onclick = () => { if(listening){ stopListening(); return; } if(busy){ stopSpeaking(); busy=false; setStatus('idle','onderbroken'); } startListening('nl-NL'); };
+$('btnZh').onclick = () => { if(listening){ stopListening(); return; } if(busy){ stopSpeaking(); busy=false; } startListening(state.settings.altLang||'zh-CN'); };
 $('btnExplain').onclick = () => { if(busy){ stopSpeaking(); busy=false; } send('[uitleg] Ik begrijp je vorige zin niet. Leg hem uit in het Chinees en vraag het dan eenvoudiger.'); };
 $('btnRepeat').onclick = () => { if(!lastNl) return; stopSpeaking(); unlockAudio(); speak(lastNl,'nl-NL',Math.max(0.5, state.settings.rate-0.25)); };
 $('btnType').onclick = () => { const tb=$('typebar'); tb.hidden=!tb.hidden; if(!tb.hidden) $('typeInput').focus(); };
