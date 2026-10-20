@@ -56,6 +56,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .stage{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:14px;padding-block:8px}
 .you{color:var(--fg-3);font-size:18px;line-height:1.35;min-height:1.4em}
 .you b{color:var(--fg-2);font-weight:500}
+.you .heard{color:var(--accent);font-size:15px}
 .claude{font-family:var(--display);font-weight:600;font-size:clamp(26px,7.5vw,40px);line-height:1.18;letter-spacing:-.015em;text-wrap:balance}
 .claude.dim{color:var(--fg-2);font-weight:400}
 .zh{font-size:19px;color:var(--fg-2);line-height:1.45}
@@ -234,6 +235,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         </select>
       </div>
       <div class="field">
+        <label for="altLang">Taal van de linkerknop</label>
+        <select id="altLang">
+          <option value="zh-CN">中文（普通话）</option>
+          <option value="en-GB">English</option>
+        </select>
+        <div class="hint">识别器一次只能听一种语言。说荷兰语用中间键；说中文或英文用左键，并在这里选好是哪种。混着说会丢字。</div>
+      </div>
+      <div class="field">
         <label for="rate">Spreeksnelheid <span id="rateVal">0.9</span></label>
         <input id="rate" type="range" min="0.6" max="1.2" step="0.05" value="0.9">
       </div>
@@ -266,9 +275,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 'use strict';
 // ---------- storage ----------
 const KEY = 'onderweg.v1';
-const defaults = { settings:{ apiKey:'', model:'claude-haiku-5-5', level:'A2', themeMode:'auto', rate:0.9, nlVoice:'' }, words:{}, sessions:{} };
+const defaults = { settings:{ apiKey:'', model:'claude-haiku-5-5', level:'A2', themeMode:'auto', rate:0.9, nlVoice:'', altLang:'zh-CN' }, words:{}, sessions:{}, openers:[] };
 let state = load();
-function load(){ try{ const raw = localStorage.getItem(KEY); if(!raw) return structuredClone(defaults); const s = JSON.parse(raw); return { settings:{...defaults.settings, ...(s.settings||{})}, words:s.words||{}, sessions:s.sessions||{} }; }catch(e){ return structuredClone(defaults); } }
+function load(){ try{ const raw = localStorage.getItem(KEY); if(!raw) return structuredClone(defaults); const s = JSON.parse(raw); return { settings:{...defaults.settings, ...(s.settings||{})}, words:s.words||{}, sessions:s.sessions||{}, openers:s.openers||[] }; }catch(e){ return structuredClone(defaults); } }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ toast('Kon niet opslaan (opslag geblokkeerd)'); } }
 
 // ---------- helpers ----------
@@ -311,8 +320,9 @@ function startListening(lang){
   if(rec){ try{ rec.abort(); }catch(e){} }
   rec = new SR(); rec.lang = lang; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
   let finalText = '';
-  rec.onstart = () => { listening=true; setStatus('listen', lang==='nl-NL' ? 'luisteren…' : '听着…'); $('btnMic').classList.add('on'); $('youText').innerHTML=''; };
-  rec.onresult = ev => { let interim=''; for(let i=ev.resultIndex;i<ev.results.length;i++){ const r=ev.results[i]; if(r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript; } $('youText').innerHTML = '<b>'+esc(finalText)+'</b>'+esc(interim); };
+  rec.onstart = () => { listening=true; setStatus('listen', lang==='nl-NL' ? 'luisteren…' : lang.startsWith('en') ? 'listening…' : '听着…'); $('btnMic').classList.add('on'); $('youText').innerHTML=''; };
+  // iOS Safari re-sends the whole transcript on every event, so rebuild from all results each time instead of appending.
+  rec.onresult = ev => { let fin='', interim=''; for(let i=0;i<ev.results.length;i++){ const r=ev.results[i]; const t=(r[0]&&r[0].transcript)||''; if(r.isFinal) fin += (fin?' ':'')+t.trim(); else interim += (interim?' ':'')+t.trim(); } finalText = fin || interim; $('youText').innerHTML = '<b>'+esc(fin)+'</b>'+(fin&&interim?' ':'')+esc(interim); };
   rec.onerror = ev => { listening=false; $('btnMic').classList.remove('on');
     if(ev.error==='not-allowed' || ev.error==='service-not-allowed'){ setStatus('idle','microfoon geblokkeerd'); toast('麦克风被拒绝：Safari 地址栏 AA → 网站设置 → 麦克风 → 允许'); }
     else if(ev.error==='no-speech'){ setStatus('idle','niets gehoord'); }
@@ -367,10 +377,21 @@ function levelText(){
     default: return 'A2: very short, concrete sentences (max 2, max ~22 words total), present tense mostly, everyday vocabulary.';
   }
 }
+function recentHistory(){
+  // last 3 earlier sessions, condensed: what she said and what you asked
+  const days = Object.keys(state.sessions).filter(d=>d!==session.date).sort().slice(-3);
+  const parts = [];
+  for(const d of days){ const s=state.sessions[d]; if(!s || !s.log || !s.log.length) continue;
+    const lines = s.log.slice(-5).map(x=>'  Lu: '+x.u+' / jij: '+x.a);
+    parts.push(d+' ('+s.theme+'):\n'+lines.join('\n')); }
+  return parts.join('\n') || 'none yet';
+}
 function systemPrompt(){
   const theme = session.theme;
   const due = dueWords().slice(0,4).map(w=>w.w).join(', ') || 'none';
   const known = Object.values(state.words).sort((a,b)=>b.added.localeCompare(a.added)).slice(0,60).map(w=>w.w).join(', ') || 'none';
+  const openers = (state.openers||[]).slice(-8).join(' | ') || 'none';
+  const history = recentHistory();
   const themeText = theme==='werk'
     ? 'WORK at a Dutch university: meetings, e-mails, colleagues, planning, admissions, HR, deadlines, small talk at the coffee machine.'
     : 'DAILY LIFE in the Netherlands: her daughter\'s school, neighbours, the gemeente, shopping, moving house, weekend plans, the weather, appointments.';
@@ -380,14 +401,19 @@ Today's theme: ${themeText}
 Words due for review today (weave one in naturally when it fits, by using it in your question): ${due}
 Words she already learned (never list these as new): ${known}
 
+Earlier conversations (for continuity: refer back naturally, ask follow-ups about things she told you, never ask the same question twice):
+${history}
+Opening questions you already used on earlier days (never reuse these, vary the opening every time): ${openers}
+
 Behaviour:
+- Her messages come from speech recognition set to Dutch, which garbles words, drops syllables, and mangles any Chinese or English she mixes in. Read charitably: reconstruct what an A2 learner most likely meant from context and from the conversation so far. If you had to reinterpret a garbled message, put your reading of it in "heard" as a short Dutch sentence (e.g. "Ik heb morgen vrij."), otherwise "". If the message is truly unintelligible, do not guess an answer: set "zh" to "没听清，请再说一遍" and in "nl" ask her briefly to repeat and restate your previous question.
 - If her message is in Chinese or English, or she says she does not understand (e.g. "ik begrijp het niet", "wat betekent", "不懂", "什么意思", "[uitleg]"), then: fill "breakdown" with your PREVIOUS Dutch sentence split into word groups with Chinese meanings, put a one-line Chinese note in "zh", and in "nl" ask the same question again in simpler Dutch.
 - If she made a mistake worth fixing (word order, article, verb form, wrong word), put the corrected sentence in "fix" and a very short Chinese explanation (max 12 characters) in "zh". Then continue the conversation in "nl". Ignore small slips; speech recognition also makes errors, so only fix what is clearly hers.
 - "words": 0 to 2 words or expressions from YOUR reply that are probably new for her level, each with a short Chinese meaning and one short example sentence in Dutch. Include the article for nouns (de/het). Do not include words from the "already learned" list.
 - Keep "nl" free of parentheses, quotes and English.
 
 Reply with ONLY a JSON object, no other text:
-{"nl":"...","zh":"","fix":"","words":[{"w":"het verlof","zh":"休假","ex":"Ik neem morgen verlof."}],"breakdown":[{"nl":"...","zh":"..."}]}
+{"nl":"...","zh":"","fix":"","heard":"","words":[{"w":"het verlof","zh":"休假","ex":"Ik neem morgen verlof."}],"breakdown":[{"nl":"...","zh":"..."}]}
 Use "" or [] for fields that do not apply.`;
 }
 
@@ -395,7 +421,7 @@ async function callClaude(messages){
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{ 'content-type':'application/json', 'x-api-key': state.settings.apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
-    body: JSON.stringify({ model: state.settings.model, max_tokens: 500, system: systemPrompt(), messages })
+    body: JSON.stringify({ model: state.settings.model, max_tokens: 900, system: systemPrompt(), messages })
   });
   if(!res.ok){ let msg = 'HTTP '+res.status; try{ const j=await res.json(); msg = (j.error && j.error.message) || msg; }catch(e){} const err = new Error(msg); err.status=res.status; throw err; }
   const j = await res.json();
@@ -403,9 +429,13 @@ async function callClaude(messages){
   return parseJSON(text);
 }
 function parseJSON(text){
+  text = String(text||'').trim();
   try{ return JSON.parse(text); }catch(e){}
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/); if(fence){ try{ return JSON.parse(fence[1]); }catch(e){} }
   const m = text.match(/\{[\s\S]*\}/); if(m){ try{ return JSON.parse(m[0]); }catch(e){} }
-  return { nl: text.replace(/[{}"\[\]]/g,' ').trim().slice(0,200), zh:'', fix:'', words:[], breakdown:[] };
+  // Last resort: pull the "nl" value out by hand so the viewer never sees raw JSON.
+  const nl = text.match(/"nl"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  return { nl: nl ? nl[1].replace(/\\"/g,'"') : text.replace(/[{}"\[\]]/g,' ').replace(/\s+/g,' ').trim().slice(0,200), zh:'', fix:'', words:[], breakdown:[] };
 }
 
 async function send(userText){
@@ -424,10 +454,11 @@ async function send(userText){
     setStatus('idle', 'fout'); $('claudeText').textContent = msg; $('claudeText').classList.add('dim');
     speak('出错了', 'zh-CN', 1); return;
   }
-  const nl = String(reply.nl||'').trim(), zh = String(reply.zh||'').trim(), fix = String(reply.fix||'').trim();
+  const nl = String(reply.nl||'').trim(), zh = String(reply.zh||'').trim(), fix = String(reply.fix||'').trim(), heard = String(reply.heard||'').trim();
+  if(heard && heard.toLowerCase()!==userText.toLowerCase()) $('youText').innerHTML = '<b>'+esc(userText)+'</b><br><span class="heard">begrepen als: '+esc(heard)+'</span>';
   const words = Array.isArray(reply.words) ? reply.words.filter(w=>w && w.w) : [];
   const breakdown = Array.isArray(reply.breakdown) ? reply.breakdown.filter(b=>b && b.nl) : [];
-  turns.push({ role:'assistant', content: JSON.stringify({nl, zh, fix}) });
+  turns.push({ role:'assistant', content: nl || '…' });
   // render
   $('claudeText').classList.remove('dim'); $('claudeText').textContent = nl || '…';
   $('fixText').hidden = !fix; $('fixText').textContent = fix;
@@ -437,7 +468,11 @@ async function send(userText){
   // vocab
   const t = todayISO();
   for(const w of words){ const s = slug(String(w.w)); if(!s || state.words[s]) continue; state.words[s] = { w:String(w.w).trim(), zh:String(w.zh||'').trim(), ex:String(w.ex||'').trim(), box:0, added:t, due:addDays(t,1), seen:0 }; session.newWords.push(s); }
-  session.turns++; state.sessions[session.date] = { theme:session.theme, turns:session.turns, newWords:session.newWords.slice() }; save();
+  session.turns++;
+  if(!userText.startsWith('[')) session.log.push({ u:userText.slice(0,160), a:nl.slice(0,160) });
+  else if(session.turns===1 && nl){ state.openers = (state.openers||[]).concat(nl.slice(0,120)).slice(-10); }
+  if(session.log.length>12) session.log.splice(0, session.log.length-12);
+  state.sessions[session.date] = { theme:session.theme, turns:session.turns, newWords:session.newWords.slice(), log:session.log.slice() }; save();
   // speak
   setStatus('speak','spreken…');
   if(breakdown.length){ if(zh) await speak(zh,'zh-CN',1.0); for(const b of breakdown){ await speak(b.nl,'nl-NL',Math.max(0.6, state.settings.rate-0.15)); if(b.zh) await speak(b.zh,'zh-CN',1.05); } }
@@ -451,13 +486,19 @@ async function beginSession(){
   unlockAudio();
   try{ if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
   const t = todayISO();
-  session = { date:t, theme: themeToday(), turns:0, newWords:[] };
-  const prev = state.sessions[t]; if(prev){ session.turns = prev.turns||0; session.newWords = prev.newWords||[]; }
+  session = { date:t, theme: themeToday(), turns:0, newWords:[], log:[] };
+  const prev = state.sessions[t]; if(prev){ session.turns = prev.turns||0; session.newWords = prev.newWords||[]; session.log = (prev.log||[]).slice(); }
+  // Same day, reopened: continue where we left off instead of starting over.
   turns = [];
+  for(const x of session.log.slice(-6)){ turns.push({role:'user',content:x.u}); turns.push({role:'assistant',content:x.a}); }
   show('viewSession');
   $('themeChip').textContent = session.theme;
   $('claudeText').textContent='…'; $('youText').textContent=''; $('fixText').hidden=true; $('zhText').hidden=true; $('breakdown').hidden=true;
-  await send('[start] Begin het gesprek: groet me kort, stel één vraag waarin je een herhaalwoord gebruikt als er een is, anders begin direct met het thema van vandaag.');
+  if(session.log.length){
+    await send('[verder] We gaan verder met het gesprek van vandaag. Pak de draad op met een nieuwe vraag die aansluit bij wat ik net vertelde; herhaal geen eerdere vraag.');
+  } else {
+    await send('[start] Begin het gesprek: groet me kort. Als er een herhaalwoord is, stel één vraag waarin je het gebruikt; anders begin met een concrete, nieuwe vraag over het thema van vandaag. Als we eerder gesproken hebben, verwijs kort naar iets uit een eerder gesprek.');
+  }
 }
 async function endSession(){
   stopListening(); stopSpeaking();
@@ -506,11 +547,13 @@ function fillVoiceSelect(){
   nl.forEach(v=>{ const o=document.createElement('option'); o.value=v.name; o.textContent=v.name+' ('+v.lang+')'; if(v.name===cur) o.selected=true; sel.appendChild(o); });
 }
 function renderSettings(){
-  const s=state.settings; $('apiKey').value=s.apiKey; $('model').value=s.model; $('level').value=s.level; $('themeMode').value=s.themeMode; $('rate').value=s.rate; $('rateVal').textContent=Number(s.rate).toFixed(2); fillVoiceSelect();
+  const s=state.settings; $('apiKey').value=s.apiKey; $('model').value=s.model; $('level').value=s.level; $('themeMode').value=s.themeMode; $('altLang').value=s.altLang||'zh-CN'; $('rate').value=s.rate; $('rateVal').textContent=Number(s.rate).toFixed(2); fillVoiceSelect();
+  $('btnZh').querySelector('b').textContent = (s.altLang||'zh-CN').startsWith('en') ? 'EN' : '中文';
 }
 $('rate').oninput = e => $('rateVal').textContent = Number(e.target.value).toFixed(2);
 $('saveSettings').onclick = () => {
-  state.settings = { apiKey:$('apiKey').value.trim(), model:$('model').value, level:$('level').value, themeMode:$('themeMode').value, rate:Number($('rate').value), nlVoice:$('nlVoice').value };
+  state.settings = { apiKey:$('apiKey').value.trim(), model:$('model').value, level:$('level').value, themeMode:$('themeMode').value, rate:Number($('rate').value), nlVoice:$('nlVoice').value, altLang:$('altLang').value };
+  $('btnZh').querySelector('b').textContent = state.settings.altLang.startsWith('en') ? 'EN' : '中文';
   save(); toast('Opgeslagen'); show('viewStart');
 };
 $('exportBtn').onclick = async () => {
@@ -531,7 +574,7 @@ $('navSettings').onclick = () => show('viewSettings');
 $('backFromWords').onclick = () => show(session && !$('viewSession').hidden ? 'viewSession' : 'viewStart');
 $('backFromSettings').onclick = () => show('viewStart');
 $('btnMic').onclick = () => { if(listening){ stopListening(); return; } if(busy){ stopSpeaking(); busy=false; setStatus('idle','onderbroken'); } unlockAudio(); startListening('nl-NL'); };
-$('btnZh').onclick = () => { if(busy){ stopSpeaking(); busy=false; } unlockAudio(); startListening('zh-CN'); };
+$('btnZh').onclick = () => { if(busy){ stopSpeaking(); busy=false; } unlockAudio(); startListening(state.settings.altLang||'zh-CN'); };
 $('btnExplain').onclick = () => { if(busy){ stopSpeaking(); busy=false; } send('[uitleg] Ik begrijp je vorige zin niet. Leg hem uit in het Chinees en vraag het dan eenvoudiger.'); };
 $('btnRepeat').onclick = () => { if(!lastNl) return; stopSpeaking(); unlockAudio(); speak(lastNl,'nl-NL',Math.max(0.5, state.settings.rate-0.25)); };
 $('btnType').onclick = () => { const tb=$('typebar'); tb.hidden=!tb.hidden; if(!tb.hidden) $('typeInput').focus(); };
