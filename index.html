@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1522">
+<title>Onderweg</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f1522'/%3E%3Ccircle cx='32' cy='32' r='14' fill='%23e39a3b'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230f1522'/%3E%3Ccircle cx='32' cy='32' r='14' fill='%23e39a3b'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700&display=swap">
+<style>
+/* Layout: one screen, the sentence in the middle, three thumb targets at the bottom.
+   Built for a phone in a car holder: big type, one glance, dark by default. */
+:root{
+  --bg:#0f1522; --bg-2:#161e2e; --fg:#f2eee6; --fg-2:#aab0bd; --fg-3:#6b7384;
+  --accent:#e39a3b; --accent-fg:#1a1206; --ok:#6fcf97; --warn:#e0b04a; --bad:#ef7a6b;
+  --line:rgba(242,238,230,.1); --ring:rgba(227,154,59,.35);
+  --display:"Bricolage Grotesque",-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+  --body:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  --bg:#f6f3ec; --bg-2:#ffffff; --fg:#161a24; --fg-2:#4a5160; --fg-3:#8a90a0;
+  --accent:#c77c1a; --accent-fg:#fff8ec; --line:rgba(22,26,36,.1); --ring:rgba(199,124,26,.3);
+  color-scheme:light; }}
+:root[data-theme="light"]{
+  --bg:#f6f3ec; --bg-2:#ffffff; --fg:#161a24; --fg-2:#4a5160; --fg-3:#8a90a0;
+  --accent:#c77c1a; --accent-fg:#fff8ec; --line:rgba(22,26,36,.1); --ring:rgba(199,124,26,.3);
+  color-scheme:light; }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.4;
+  -webkit-text-size-adjust:100%;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-user-select:none;user-select:none}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+.app{height:100%;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:10px 6px}
+.brand{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.01em}
+.brand{white-space:nowrap}
+.brand small{font-weight:400;color:var(--fg-3);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-left:8px}
+.chips{display:flex;gap:6px;align-items:center}
+.chip{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2);border:1px solid var(--line);border-radius:999px;padding:5px 10px}
+.chip.accent{color:var(--accent);border-color:var(--ring)}
+.iconbtn{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:var(--fg-2);border:1px solid var(--line)}
+.iconbtn svg{width:20px;height:20px}
+/* views */
+.view{flex:1;min-height:0;display:flex;flex-direction:column}
+/* session view */
+.stage{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:14px;padding-block:8px}
+.you{color:var(--fg-3);font-size:18px;line-height:1.35;min-height:1.4em}
+.you b{color:var(--fg-2);font-weight:500}
+.claude{font-family:var(--display);font-weight:600;font-size:clamp(26px,7.5vw,40px);line-height:1.18;letter-spacing:-.015em;text-wrap:balance}
+.claude.dim{color:var(--fg-2);font-weight:400}
+.zh{font-size:19px;color:var(--fg-2);line-height:1.45}
+.fix{font-size:18px;color:var(--accent);line-height:1.4}
+.fix::before{content:"→ ";opacity:.7}
+.breakdown{display:flex;flex-direction:column;gap:6px;border-left:3px solid var(--ring);padding-left:12px;margin-top:4px;max-height:34vh;overflow:auto}
+.breakdown div{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:17px}
+.breakdown span:last-child{color:var(--fg-2)}
+.status{display:flex;align-items:center;gap:10px;color:var(--fg-3);font-size:13px;letter-spacing:.08em;text-transform:uppercase;min-height:20px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--fg-3)}
+.status[data-s="listen"] .dot{background:var(--bad);animation:pulse 1s infinite}
+.status[data-s="think"] .dot{background:var(--warn);animation:pulse .8s infinite}
+.status[data-s="speak"] .dot{background:var(--ok)}
+@keyframes pulse{50%{opacity:.3}}
+@media (prefers-reduced-motion: reduce){ .dot,.mic.on{animation:none} }
+/* controls */
+.controls{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding-block:8px 10px}
+.side{height:84px;border-radius:20px;background:var(--bg-2);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:15px;color:var(--fg-2)}
+.side b{font-size:22px;color:var(--fg);font-weight:600;font-family:var(--display)}
+.side:active{background:var(--line)}
+.mic{width:132px;height:132px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;
+  box-shadow:0 0 0 0 var(--ring);transition:box-shadow .2s,transform .1s}
+.mic svg{width:52px;height:52px}
+.mic:active{transform:scale(.97)}
+.mic.on{animation:ring 1.2s infinite}
+.mic.busy{opacity:.55}
+@keyframes ring{0%{box-shadow:0 0 0 0 var(--ring)}100%{box-shadow:0 0 0 26px rgba(0,0,0,0)}}
+.row2{display:flex;gap:10px;padding-bottom:12px}
+.row2 button{flex:1;height:48px;border-radius:14px;border:1px solid var(--line);color:var(--fg-2);font-size:15px}
+.row2 button.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent;font-weight:600}
+.typebar{display:flex;gap:8px;padding-bottom:10px}
+.typebar input{flex:1;min-width:0;height:48px;border-radius:14px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg);padding:0 14px;font-size:17px}
+.typebar button{width:64px;border-radius:14px;background:var(--accent);color:var(--accent-fg);font-weight:600}
+/* start screen */
+.start{flex:1;display:flex;flex-direction:column;justify-content:center;gap:18px;padding-block:20px}
+.start h1{font-family:var(--display);font-size:clamp(34px,10vw,56px);line-height:1;margin:0;letter-spacing:-.02em}
+.start p{color:var(--fg-2);font-size:17px;max-width:34ch;margin:0}
+.start .meta{display:flex;flex-wrap:wrap;gap:8px}
+.bigbtn{height:72px;border-radius:22px;background:var(--accent);color:var(--accent-fg);font-family:var(--display);font-weight:700;font-size:24px}
+.safety{font-size:13px;color:var(--fg-3);line-height:1.5}
+.err{color:var(--bad);font-size:15px;line-height:1.45}
+/* words view */
+.panel{flex:1;min-height:0;overflow:auto;padding-block:6px 20px;display:flex;flex-direction:column;gap:18px}
+.panel h2{font-family:var(--display);font-size:16px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);margin:0 0 8px;font-weight:600}
+.word{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.word .w{font-family:var(--display);font-size:20px;font-weight:600}
+.word .m{color:var(--fg-2);font-size:15px}
+.word .ex{color:var(--fg-3);font-size:14px;margin-top:2px}
+.word .acts{display:flex;gap:6px}
+.word .acts button{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);font-size:18px}
+.word .acts .ok{color:var(--ok)} .word .acts .no{color:var(--bad)}
+.box{font-size:11px;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase;margin-left:8px}
+.empty{color:var(--fg-3);font-size:15px;padding:8px 0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--bg-2);border:1px solid var(--line);border-radius:16px;padding:12px}
+.stat b{display:block;font-family:var(--display);font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase}
+/* settings */
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.field label{font-size:13px;color:var(--fg-2);letter-spacing:.04em}
+.field input,.field select,.field textarea{height:46px;border-radius:12px;border:1px solid var(--line);background:var(--bg-2);color:var(--fg);padding:0 12px;font-size:16px;font-family:var(--body)}
+.field textarea{height:120px;padding:10px 12px;resize:vertical}
+.field .hint{font-size:13px;color:var(--fg-3);line-height:1.45}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.btnrow button{height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);color:var(--fg-2);font-size:15px}
+.btnrow button.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent;font-weight:600}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:15px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:calc(100% - 32px)}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">Onderweg <small id="dateChip"></small></div>
+    <div class="chips">
+      <span class="chip accent" id="themeChip">werk</span>
+      <button class="iconbtn" id="navWords" aria-label="Woorden" title="Woorden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+      </button>
+      <button class="iconbtn" id="navSettings" aria-label="Instellingen" title="Instellingen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- START -->
+  <section class="view" id="viewStart">
+    <div class="start">
+      <h1><span id="greet">Goedemorgen</span>,<br>Lu.</h1>
+      <p id="startIntro">Vandaag praten we over <b id="startTheme">werk</b>.</p>
+      <div class="meta">
+        <span class="chip" id="dueChip">0 woorden te herhalen</span>
+        <span class="chip" id="totalChip">0 woorden geleerd</span>
+      </div>
+      <div class="err" id="startErr" hidden></div>
+      <button class="bigbtn" id="beginBtn">Begin het gesprek</button>
+      <p class="safety">Alleen tikken als de auto stilstaat of de telefoon in een houder zit. 一轮一下：点中间开始说，说完自动停。</p>
+    </div>
+  </section>
+
+  <!-- SESSION -->
+  <section class="view" id="viewSession" hidden>
+    <div class="stage">
+      <div class="you" id="youText"></div>
+      <div class="claude" id="claudeText">…</div>
+      <div class="fix" id="fixText" hidden></div>
+      <div class="zh" id="zhText" hidden></div>
+      <div class="breakdown" id="breakdown" hidden></div>
+      <div class="status" id="status" data-s="idle"><span class="dot"></span><span id="statusText">klaar</span></div>
+    </div>
+    <div class="typebar" id="typebar" hidden>
+      <input id="typeInput" type="text" placeholder="Typ in het Nederlands…" autocomplete="off" autocapitalize="sentences">
+      <button id="typeSend">→</button>
+    </div>
+    <div class="controls">
+      <button class="side" id="btnZh" aria-label="用中文说"><b>中文</b><span>用中文说</span></button>
+      <button class="mic" id="btnMic" aria-label="Spreek Nederlands">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" stroke="none"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button class="side" id="btnExplain" aria-label="拆解上一句"><b>拆解</b><span>听不懂</span></button>
+    </div>
+    <div class="row2">
+      <button id="btnRepeat">Herhaal langzaam</button>
+      <button id="btnType">⌨︎</button>
+      <button id="btnStop">Stop</button>
+    </div>
+  </section>
+
+  <!-- WORDS -->
+  <section class="view" id="viewWords" hidden>
+    <div class="panel">
+      <div class="stats">
+        <div class="stat"><b id="sDue">0</b><span>te herhalen</span></div>
+        <div class="stat"><b id="sLearning">0</b><span>aan het leren</span></div>
+        <div class="stat"><b id="sKnown">0</b><span>bekend</span></div>
+      </div>
+      <div><h2>Vandaag herhalen</h2><div id="listDue"></div></div>
+      <div><h2>Aan het leren</h2><div id="listLearning"></div></div>
+      <div><h2>Bekend</h2><div id="listKnown"></div></div>
+      <div><h2>Sessies</h2><div id="listSessions"></div></div>
+      <div class="btnrow">
+        <button id="backFromWords" class="primary">Terug</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="viewSettings" hidden>
+    <div class="panel">
+      <div class="field">
+        <label for="apiKey">Anthropic API key</label>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-…">
+        <div class="hint">只存在这台手机的浏览器里，不会上传到别处。在 console.anthropic.com 生成。</div>
+      </div>
+      <div class="field">
+        <label for="model">Model</label>
+        <select id="model">
+          <option value="claude-haiku-5-5">claude-haiku-5-5（快，适合对话）</option>
+          <option value="claude-sonnet-5-5">claude-sonnet-5-5（荷兰语更好，稍慢）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="level">Niveau</label>
+        <select id="level">
+          <option value="A2">A2 — korte zinnen, veel herhaling</option>
+          <option value="A2+">A2+ — iets langer, nieuwe woorden in context</option>
+          <option value="B1">B1 — natuurlijker tempo</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="themeMode">Thema</label>
+        <select id="themeMode">
+          <option value="auto">Wisselend per dag (werk / dagelijks)</option>
+          <option value="werk">Altijd werk</option>
+          <option value="dagelijks">Altijd dagelijks leven</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="rate">Spreeksnelheid <span id="rateVal">0.9</span></label>
+        <input id="rate" type="range" min="0.6" max="1.2" step="0.05" value="0.9">
+      </div>
+      <div class="field">
+        <label for="nlVoice">Nederlandse stem</label>
+        <select id="nlVoice"></select>
+        <div class="hint">iPhone：设置 → 辅助功能 → 朗读内容 → 声音 → 荷兰语，可下载更自然的声音。</div>
+      </div>
+      <div class="field">
+        <label>Woordenlijst</label>
+        <div class="btnrow">
+          <button id="exportBtn">Exporteer (kopieer)</button>
+          <button id="importToggle">Importeer</button>
+        </div>
+        <textarea id="importBox" hidden placeholder="Plak hier de geëxporteerde JSON…"></textarea>
+        <div class="btnrow" id="importRow" hidden><button id="importBtn" class="primary">Samenvoegen</button></div>
+      </div>
+      <div class="btnrow">
+        <button id="saveSettings" class="primary">Opslaan</button>
+        <button id="backFromSettings">Terug</button>
+      </div>
+      <p class="hint" style="margin-top:18px">Mic 不工作？Safari 地址栏左侧 "AA" → 网站设置 → 麦克风 → 允许。加到主屏幕：分享 → 添加到主屏幕。</p>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+// ---------- storage ----------
+const KEY = 'onderweg.v1';
+const defaults = { settings:{ apiKey:'', model:'claude-haiku-5-5', level:'A2', themeMode:'auto', rate:0.9, nlVoice:'' }, words:{}, sessions:{} };
+let state = load();
+function load(){ try{ const raw = localStorage.getItem(KEY); if(!raw) return structuredClone(defaults); const s = JSON.parse(raw); return { settings:{...defaults.settings, ...(s.settings||{})}, words:s.words||{}, sessions:s.sessions||{} }; }catch(e){ return structuredClone(defaults); } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ toast('Kon niet opslaan (opslag geblokkeerd)'); } }
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const todayISO = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const addDays = (iso,n) => { const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const INTERVALS = [1,3,7,14,30];
+const slug = w => w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/^(de|het|een)\s+/,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+let toastT; function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2600); }
+
+function themeToday(){
+  const m = state.settings.themeMode; if(m!=='auto') return m;
+  const d = new Date(); const start = new Date(d.getFullYear(),0,0); const doy = Math.floor((d-start)/86400000);
+  return doy%2===0 ? 'werk' : 'dagelijks';
+}
+function dueWords(){ const t=todayISO(); return Object.values(state.words).filter(w=>w.box<4 && w.due<=t).sort((a,b)=>a.box-b.box || a.due.localeCompare(b.due)); }
+
+// ---------- views ----------
+const views = ['viewStart','viewSession','viewWords','viewSettings'];
+function show(id){ views.forEach(v=>$(v).hidden = v!==id); if(id==='viewWords') renderWords(); if(id==='viewSettings') renderSettings(); if(id==='viewStart') renderStart(); }
+function renderStart(){
+  const th = themeToday(); $('themeChip').textContent = th; $('startTheme').textContent = th==='werk' ? 'werk' : 'het dagelijks leven';
+  const d=new Date(); $('dateChip').textContent = d.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
+  const h=d.getHours(); $('greet').textContent = h<12 ? 'Goedemorgen' : h<18 ? 'Goedemiddag' : 'Goedenavond';
+  const due = dueWords().length, total = Object.keys(state.words).length;
+  $('dueChip').textContent = due+(due===1?' woord':' woorden')+' te herhalen';
+  $('totalChip').textContent = total+(total===1?' woord':' woorden')+' geleerd';
+  const err=$('startErr'); err.hidden=true;
+  if(!state.settings.apiKey){ err.hidden=false; err.textContent='Nog geen API key. Open de instellingen (⚙) en vul je Anthropic API key in.'; }
+  else if(!SR){ err.hidden=false; err.textContent='Deze browser kent geen spraakherkenning. Gebruik Safari op iPhone, of typ je antwoorden (⌨︎).'; }
+}
+
+// ---------- speech recognition ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+let rec = null, listening = false, busy = false;
+function startListening(lang){
+  if(!SR){ $('typebar').hidden=false; $('typeInput').focus(); return; }
+  if(busy) return;
+  stopSpeaking();
+  if(rec){ try{ rec.abort(); }catch(e){} }
+  rec = new SR(); rec.lang = lang; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+  let finalText = '';
+  rec.onstart = () => { listening=true; setStatus('listen', lang==='nl-NL' ? 'luisteren…' : '听着…'); $('btnMic').classList.add('on'); $('youText').innerHTML=''; };
+  rec.onresult = ev => { let interim=''; for(let i=ev.resultIndex;i<ev.results.length;i++){ const r=ev.results[i]; if(r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript; } $('youText').innerHTML = '<b>'+esc(finalText)+'</b>'+esc(interim); };
+  rec.onerror = ev => { listening=false; $('btnMic').classList.remove('on');
+    if(ev.error==='not-allowed' || ev.error==='service-not-allowed'){ setStatus('idle','microfoon geblokkeerd'); toast('麦克风被拒绝：Safari 地址栏 AA → 网站设置 → 麦克风 → 允许'); }
+    else if(ev.error==='no-speech'){ setStatus('idle','niets gehoord'); }
+    else { setStatus('idle','fout: '+ev.error); } };
+  rec.onend = () => { listening=false; $('btnMic').classList.remove('on'); const t=finalText.trim(); if(t){ send(t); } else if($('status').dataset.s==='listen'){ setStatus('idle','niets gehoord — tik opnieuw'); } };
+  try{ rec.start(); }catch(e){ setStatus('idle','kon niet starten'); }
+}
+function stopListening(){ if(rec && listening){ try{ rec.stop(); }catch(e){} } }
+
+// ---------- speech synthesis ----------
+const synth = window.speechSynthesis;
+let voices = [];
+function loadVoices(){ voices = synth ? synth.getVoices() : []; fillVoiceSelect(); }
+if(synth){ loadVoices(); synth.onvoiceschanged = loadVoices; }
+function pickVoice(lang){
+  const pref = lang.startsWith('nl') ? state.settings.nlVoice : '';
+  if(pref){ const v = voices.find(v=>v.name===pref); if(v) return v; }
+  const cands = voices.filter(v=>v.lang && v.lang.toLowerCase().startsWith(lang.toLowerCase().slice(0,2)));
+  if(!cands.length) return null;
+  const premium = cands.find(v=>/premium|enhanced|siri/i.test(v.name)); if(premium) return premium;
+  const exact = cands.find(v=>v.lang.toLowerCase()===lang.toLowerCase()); return exact || cands[0];
+}
+let speakQueue = Promise.resolve();
+function speak(text, lang, rate){
+  if(!synth || !text) return Promise.resolve();
+  return new Promise(res => {
+    const u = new SpeechSynthesisUtterance(text); u.lang = lang; const v = pickVoice(lang); if(v) u.voice = v;
+    u.rate = rate || state.settings.rate; u.pitch = 1;
+    u.onend = () => res(); u.onerror = () => res();
+    synth.speak(u);
+    // Safari sometimes never fires onend; guard with a timer scaled to length.
+    setTimeout(res, Math.min(20000, 1500 + text.length*120 / (u.rate||1)));
+  });
+}
+function stopSpeaking(){ if(synth){ try{ synth.cancel(); }catch(e){} } }
+function unlockAudio(){ if(!synth) return; try{ const u=new SpeechSynthesisUtterance(' '); u.volume=0; synth.speak(u); }catch(e){} }
+
+// ---------- status ----------
+function setStatus(s, text){ const el=$('status'); el.dataset.s=s; $('statusText').textContent=text; $('btnMic').classList.toggle('busy', s==='think'||s==='speak'); }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// ---------- conversation ----------
+let turns = [];          // [{role, content}] for the API, page-side memory
+let lastNl = '';         // last Dutch sentence spoken by Claude
+let session = null;      // {date, theme, turns, newWords:[]}
+let wakeLock = null;
+
+function levelText(){
+  switch(state.settings.level){
+    case 'B1': return 'B1: natural spoken Dutch, up to 2 sentences, you may use subordinate clauses.';
+    case 'A2+': return 'A2 moving to B1: short clear sentences (max 2), one slightly harder word in a clear context is fine.';
+    default: return 'A2: very short, concrete sentences (max 2, max ~22 words total), present tense mostly, everyday vocabulary.';
+  }
+}
+function systemPrompt(){
+  const theme = session.theme;
+  const due = dueWords().slice(0,4).map(w=>w.w).join(', ') || 'none';
+  const known = Object.values(state.words).sort((a,b)=>b.added.localeCompare(a.added)).slice(0,60).map(w=>w.w).join(', ') || 'none';
+  const themeText = theme==='werk'
+    ? 'WORK at a Dutch university: meetings, e-mails, colleagues, planning, admissions, HR, deadlines, small talk at the coffee machine.'
+    : 'DAILY LIFE in the Netherlands: her daughter\'s school, neighbours, the gemeente, shopping, moving house, weekend plans, the weather, appointments.';
+  return `You are a Dutch conversation partner for Lu. She is a native Chinese speaker learning Dutch, currently ${levelText()}
+She is DRIVING while talking to you, through speech recognition and text-to-speech. So: every reply is short, natural spoken Dutch, and ends with exactly one question to keep her talking. Never use lists, markdown or English.
+Today's theme: ${themeText}
+Words due for review today (weave one in naturally when it fits, by using it in your question): ${due}
+Words she already learned (never list these as new): ${known}
+
+Behaviour:
+- If her message is in Chinese or English, or she says she does not understand (e.g. "ik begrijp het niet", "wat betekent", "不懂", "什么意思", "[uitleg]"), then: fill "breakdown" with your PREVIOUS Dutch sentence split into word groups with Chinese meanings, put a one-line Chinese note in "zh", and in "nl" ask the same question again in simpler Dutch.
+- If she made a mistake worth fixing (word order, article, verb form, wrong word), put the corrected sentence in "fix" and a very short Chinese explanation (max 12 characters) in "zh". Then continue the conversation in "nl". Ignore small slips; speech recognition also makes errors, so only fix what is clearly hers.
+- "words": 0 to 2 words or expressions from YOUR reply that are probably new for her level, each with a short Chinese meaning and one short example sentence in Dutch. Include the article for nouns (de/het). Do not include words from the "already learned" list.
+- Keep "nl" free of parentheses, quotes and English.
+
+Reply with ONLY a JSON object, no other text:
+{"nl":"...","zh":"","fix":"","words":[{"w":"het verlof","zh":"休假","ex":"Ik neem morgen verlof."}],"breakdown":[{"nl":"...","zh":"..."}]}
+Use "" or [] for fields that do not apply.`;
+}
+
+async function callClaude(messages){
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{ 'content-type':'application/json', 'x-api-key': state.settings.apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+    body: JSON.stringify({ model: state.settings.model, max_tokens: 500, system: systemPrompt(), messages })
+  });
+  if(!res.ok){ let msg = 'HTTP '+res.status; try{ const j=await res.json(); msg = (j.error && j.error.message) || msg; }catch(e){} const err = new Error(msg); err.status=res.status; throw err; }
+  const j = await res.json();
+  const text = (j.content||[]).map(c=>c.text||'').join('');
+  return parseJSON(text);
+}
+function parseJSON(text){
+  try{ return JSON.parse(text); }catch(e){}
+  const m = text.match(/\{[\s\S]*\}/); if(m){ try{ return JSON.parse(m[0]); }catch(e){} }
+  return { nl: text.replace(/[{}"\[\]]/g,' ').trim().slice(0,200), zh:'', fix:'', words:[], breakdown:[] };
+}
+
+async function send(userText){
+  if(busy) return; busy = true;
+  stopListening();
+  $('youText').innerHTML = '<b>'+esc(userText)+'</b>';
+  setStatus('think','denken…');
+  turns.push({ role:'user', content:userText });
+  if(turns.length > 24) turns.splice(0, turns.length-24);
+  let reply;
+  try{
+    reply = await callClaude(turns);
+  }catch(e){
+    busy=false; turns.pop();
+    const msg = e.status===401 ? 'API key 不对或过期' : e.status===429 ? '请求太频繁，等一下' : e.status===400 ? '请求被拒绝：'+e.message : (navigator.onLine ? '出错：'+e.message : '没有网络');
+    setStatus('idle', 'fout'); $('claudeText').textContent = msg; $('claudeText').classList.add('dim');
+    speak('出错了', 'zh-CN', 1); return;
+  }
+  const nl = String(reply.nl||'').trim(), zh = String(reply.zh||'').trim(), fix = String(reply.fix||'').trim();
+  const words = Array.isArray(reply.words) ? reply.words.filter(w=>w && w.w) : [];
+  const breakdown = Array.isArray(reply.breakdown) ? reply.breakdown.filter(b=>b && b.nl) : [];
+  turns.push({ role:'assistant', content: JSON.stringify({nl, zh, fix}) });
+  // render
+  $('claudeText').classList.remove('dim'); $('claudeText').textContent = nl || '…';
+  $('fixText').hidden = !fix; $('fixText').textContent = fix;
+  $('zhText').hidden = !zh; $('zhText').textContent = zh;
+  const bd = $('breakdown'); bd.innerHTML=''; bd.hidden = !breakdown.length;
+  breakdown.forEach(b=>{ const d=document.createElement('div'); d.innerHTML='<span>'+esc(b.nl)+'</span><span>'+esc(b.zh||'')+'</span>'; bd.appendChild(d); });
+  // vocab
+  const t = todayISO();
+  for(const w of words){ const s = slug(String(w.w)); if(!s || state.words[s]) continue; state.words[s] = { w:String(w.w).trim(), zh:String(w.zh||'').trim(), ex:String(w.ex||'').trim(), box:0, added:t, due:addDays(t,1), seen:0 }; session.newWords.push(s); }
+  session.turns++; state.sessions[session.date] = { theme:session.theme, turns:session.turns, newWords:session.newWords.slice() }; save();
+  // speak
+  setStatus('speak','spreken…');
+  if(breakdown.length){ if(zh) await speak(zh,'zh-CN',1.0); for(const b of breakdown){ await speak(b.nl,'nl-NL',Math.max(0.6, state.settings.rate-0.15)); if(b.zh) await speak(b.zh,'zh-CN',1.05); } }
+  else if(fix){ if(zh) await speak(zh,'zh-CN',1.0); await speak(fix,'nl-NL',Math.max(0.6, state.settings.rate-0.1)); }
+  if(nl){ lastNl = nl; await speak(nl,'nl-NL'); }
+  busy=false; setStatus('idle','jouw beurt — tik om te spreken');
+}
+
+async function beginSession(){
+  if(!state.settings.apiKey){ show('viewSettings'); toast('先填 API key'); return; }
+  unlockAudio();
+  try{ if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
+  const t = todayISO();
+  session = { date:t, theme: themeToday(), turns:0, newWords:[] };
+  const prev = state.sessions[t]; if(prev){ session.turns = prev.turns||0; session.newWords = prev.newWords||[]; }
+  turns = [];
+  show('viewSession');
+  $('themeChip').textContent = session.theme;
+  $('claudeText').textContent='…'; $('youText').textContent=''; $('fixText').hidden=true; $('zhText').hidden=true; $('breakdown').hidden=true;
+  await send('[start] Begin het gesprek: groet me kort, stel één vraag waarin je een herhaalwoord gebruikt als er een is, anders begin direct met het thema van vandaag.');
+}
+async function endSession(){
+  stopListening(); stopSpeaking();
+  if(wakeLock){ try{ await wakeLock.release(); }catch(e){} wakeLock=null; }
+  const n = session ? session.newWords.length : 0;
+  setStatus('speak','afronden…');
+  const words = session ? session.newWords.map(s=>state.words[s]).filter(Boolean) : [];
+  if(words.length){ await speak('Nieuwe woorden vandaag.','nl-NL'); for(const w of words.slice(0,8)){ await speak(w.w,'nl-NL',0.85); if(w.zh) await speak(w.zh,'zh-CN',1.05); } }
+  await speak('Goed gedaan. Tot de volgende keer.','nl-NL');
+  toast(n ? n+' nieuwe woorden opgeslagen' : 'Sessie opgeslagen');
+  show('viewStart');
+}
+
+// ---------- words view ----------
+function wordRow(w, s){
+  const row = document.createElement('div'); row.className='word';
+  const boxName = ['nieuw','1','2','3','4','bekend'][Math.min(w.box,5)];
+  row.innerHTML = '<div><div class="w">'+esc(w.w)+'<span class="box">'+(w.box>=5?'bekend':'doos '+boxName)+'</span></div><div class="m">'+esc(w.zh)+'</div>'+(w.ex?'<div class="ex">'+esc(w.ex)+'</div>':'')+'</div>'
+    + '<div class="acts"><button class="ok" aria-label="ken ik">✓</button><button class="no" aria-label="nog niet">✗</button><button class="say" aria-label="uitspreken">♪</button></div>';
+  row.querySelector('.ok').onclick = () => { const t=todayISO(); w.box=Math.min(5,w.box+1); w.seen++; w.due = w.box>=5 ? '9999-12-31' : addDays(t, INTERVALS[Math.min(w.box,4)]); save(); renderWords(); };
+  row.querySelector('.no').onclick = () => { const t=todayISO(); w.box=0; w.seen++; w.due=addDays(t,1); save(); renderWords(); };
+  row.querySelector('.say').onclick = () => { unlockAudio(); speak(w.w,'nl-NL',0.85).then(()=> w.ex && speak(w.ex,'nl-NL',0.9)); };
+  return row;
+}
+function renderWords(){
+  const all = Object.entries(state.words).map(([s,w])=>({s,...w}));
+  const t = todayISO();
+  const due = all.filter(w=>w.box<5 && w.due<=t).sort((a,b)=>a.box-b.box);
+  const learning = all.filter(w=>w.box<5 && w.due>t).sort((a,b)=>a.due.localeCompare(b.due));
+  const known = all.filter(w=>w.box>=5).sort((a,b)=>a.w.localeCompare(b.w));
+  $('sDue').textContent=due.length; $('sLearning').textContent=learning.length; $('sKnown').textContent=known.length;
+  const fill = (id, arr, empty) => { const el=$(id); el.innerHTML=''; if(!arr.length){ el.innerHTML='<div class="empty">'+empty+'</div>'; return; } arr.forEach(w=>el.appendChild(wordRow(state.words[w.s], w.s))); };
+  fill('listDue', due, 'Niets te herhalen vandaag.');
+  fill('listLearning', learning, 'Nog geen woorden. Begin een gesprek.');
+  fill('listKnown', known, 'Nog niets gemarkeerd als bekend.');
+  const ses = Object.entries(state.sessions).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,14);
+  const el=$('listSessions'); el.innerHTML = ses.length ? '' : '<div class="empty">Nog geen sessies.</div>';
+  ses.forEach(([d,s])=>{ const div=document.createElement('div'); div.className='word'; div.innerHTML='<div><div class="w" style="font-size:16px">'+d+' <span class="box">'+esc(s.theme)+'</span></div><div class="m">'+s.turns+' beurten · '+(s.newWords||[]).length+' nieuwe woorden</div></div>'; el.appendChild(div); });
+}
+
+// ---------- settings ----------
+function fillVoiceSelect(){
+  const sel = $('nlVoice'); if(!sel) return; const cur = state.settings.nlVoice; sel.innerHTML='';
+  const nl = voices.filter(v=>v.lang && v.lang.toLowerCase().startsWith('nl'));
+  const o0 = document.createElement('option'); o0.value=''; o0.textContent = nl.length ? 'Automatisch' : 'Geen Nederlandse stem gevonden'; sel.appendChild(o0);
+  nl.forEach(v=>{ const o=document.createElement('option'); o.value=v.name; o.textContent=v.name+' ('+v.lang+')'; if(v.name===cur) o.selected=true; sel.appendChild(o); });
+}
+function renderSettings(){
+  const s=state.settings; $('apiKey').value=s.apiKey; $('model').value=s.model; $('level').value=s.level; $('themeMode').value=s.themeMode; $('rate').value=s.rate; $('rateVal').textContent=Number(s.rate).toFixed(2); fillVoiceSelect();
+}
+$('rate').oninput = e => $('rateVal').textContent = Number(e.target.value).toFixed(2);
+$('saveSettings').onclick = () => {
+  state.settings = { apiKey:$('apiKey').value.trim(), model:$('model').value, level:$('level').value, themeMode:$('themeMode').value, rate:Number($('rate').value), nlVoice:$('nlVoice').value };
+  save(); toast('Opgeslagen'); show('viewStart');
+};
+$('exportBtn').onclick = async () => {
+  const data = JSON.stringify({ words:state.words, sessions:state.sessions }, null, 0);
+  try{ await navigator.clipboard.writeText(data); toast('Gekopieerd naar klembord'); }
+  catch(e){ const box=$('importBox'); box.hidden=false; box.value=data; box.select(); toast('Selecteer en kopieer de tekst'); }
+};
+$('importToggle').onclick = () => { $('importBox').hidden=false; $('importRow').hidden=false; $('importBox').value=''; $('importBox').focus(); };
+$('importBtn').onclick = () => {
+  try{ const j = JSON.parse($('importBox').value); let n=0; for(const [s,w] of Object.entries(j.words||{})){ if(!state.words[s]){ state.words[s]=w; n++; } } Object.assign(state.sessions, j.sessions||{}); save(); toast(n+' woorden toegevoegd'); $('importBox').hidden=true; $('importRow').hidden=true; }
+  catch(e){ toast('Geen geldige JSON'); }
+};
+
+// ---------- wiring ----------
+$('beginBtn').onclick = beginSession;
+$('navWords').onclick = () => show('viewWords');
+$('navSettings').onclick = () => show('viewSettings');
+$('backFromWords').onclick = () => show(session && !$('viewSession').hidden ? 'viewSession' : 'viewStart');
+$('backFromSettings').onclick = () => show('viewStart');
+$('btnMic').onclick = () => { if(listening){ stopListening(); return; } if(busy){ stopSpeaking(); busy=false; setStatus('idle','onderbroken'); } unlockAudio(); startListening('nl-NL'); };
+$('btnZh').onclick = () => { if(busy){ stopSpeaking(); busy=false; } unlockAudio(); startListening('zh-CN'); };
+$('btnExplain').onclick = () => { if(busy){ stopSpeaking(); busy=false; } send('[uitleg] Ik begrijp je vorige zin niet. Leg hem uit in het Chinees en vraag het dan eenvoudiger.'); };
+$('btnRepeat').onclick = () => { if(!lastNl) return; stopSpeaking(); unlockAudio(); speak(lastNl,'nl-NL',Math.max(0.5, state.settings.rate-0.25)); };
+$('btnType').onclick = () => { const tb=$('typebar'); tb.hidden=!tb.hidden; if(!tb.hidden) $('typeInput').focus(); };
+$('typeSend').onclick = () => { const v=$('typeInput').value.trim(); if(!v) return; $('typeInput').value=''; send(v); };
+$('typeInput').onkeydown = e => { if(e.key==='Enter') $('typeSend').click(); };
+$('btnStop').onclick = endSession;
+document.addEventListener('visibilitychange', () => { if(document.hidden){ stopListening(); } });
+
+show('viewStart');
+})();
+</script>
+</body>
+</html>
